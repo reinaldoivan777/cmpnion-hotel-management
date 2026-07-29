@@ -2,6 +2,8 @@ import { ClipboardList, Search, SlidersHorizontal } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { useOrdersQuery } from "@/features/orders/hooks/use-orders";
+import { isSlaBreached } from "@/features/orders/orders.utils";
 
 const shellMetrics = [
   "Active Guests",
@@ -12,6 +14,12 @@ const shellMetrics = [
 ];
 
 export function DashboardPage() {
+  const ordersQuery = useOrdersQuery();
+  const orders = ordersQuery.data ?? [];
+  const breachedSlaCount = orders.filter((order) =>
+    isSlaBreached(order, new Date()),
+  ).length;
+
   return (
     <div className="space-y-6">
       <section className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
@@ -56,7 +64,7 @@ export function DashboardPage() {
                 Guest Service Orders
               </h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                Search, filter, and manage requests in the next phase.
+                Mock order data is available for dashboard selectors.
               </p>
             </div>
             <div className="flex flex-col gap-2 sm:flex-row">
@@ -73,10 +81,14 @@ export function DashboardPage() {
           <div className="p-5">
             <div className="rounded-md border border-dashed border-border bg-muted p-8 text-center">
               <p className="text-sm font-semibold text-foreground">
-                Application shell ready
+                {ordersQuery.isLoading
+                  ? "Loading mock orders..."
+                  : `${orders.length} mock orders loaded`}
               </p>
               <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-muted-foreground">
-                lorem ipsum
+                {ordersQuery.isError
+                  ? "Unable to retrieve mock order data. The query hook is ready for a retry state in a later phase."
+                  : `${breachedSlaCount} new order${breachedSlaCount === 1 ? "" : "s"} currently breach the 15-minute SLA rule.`}
               </p>
             </div>
           </div>
