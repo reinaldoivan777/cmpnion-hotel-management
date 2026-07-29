@@ -68,6 +68,12 @@ The app is organized around feature folders and a thin app shell:
 - `src/mocks`: local order dataset with 150 example orders.
 - `test`: Bun unit tests for business logic and mock API failure scenarios.
 
+## Component Structure Rationale
+
+Components are grouped by ownership and reuse boundary. App-level files own providers, routing, and layout so feature code does not need to know how the application is mounted. Shared UI primitives such as buttons, icon buttons, cards, and layout live in `src/components` because they are styling and interaction building blocks used across features.
+
+Dashboard-specific cards stay under `src/features/dashboard` because they present aggregate data only. Order-specific UI stays under `src/features/orders` because it depends on order workflow rules, filters, pagination, realtime events, and mutation behavior. Keeping selectors, URL-state helpers, API mocks, hooks, utilities, and UI in the same feature folder makes the order domain easier to change without creating cross-feature coupling.
+
 ## State Management
 
 TanStack Query owns async order state, loading/error states, caching, retries, paginated list requests, aggregate dashboard requests, and mutation updates. Status mutations optimistically update cached order pages and detail records, snapshot previous cache data, roll back on failure, and revalidate affected list and overview queries after settlement. A mock real-time subscription emits new-order and overdue-order events, updates detail cache entries, and invalidates affected paginated list and dashboard overview queries. React Router search parameters own order discovery state: search, status filter, service filter, and sort. Local React state is used for UI-only concerns such as selected order, cancellation dialog state, current page, page size, transient toast notifications, and feedback messages. Derived values such as metrics, filtered order counts, paginated orders, SLA state, and status actions are calculated from API data rather than duplicated in state.
