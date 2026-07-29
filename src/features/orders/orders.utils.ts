@@ -49,3 +49,12 @@ export function getNextPrimaryStatus(status: OrderStatus): OrderStatus | null {
       return null;
   }
 }
+
+export function getOrderAgeInMinutes(order: Order, now: Date): number {
+  const orderTime = new Date(order.orderTime);
+
+  return Math.max(
+    0,
+    Math.floor((now.getTime() - orderTime.getTime()) / 60_000),
+  );
+}
