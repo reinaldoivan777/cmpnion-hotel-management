@@ -2,12 +2,16 @@ import {
   AlertTriangle,
   CheckCircle2,
   ChevronDown,
+  ClipboardCheck,
   Clock3,
   Eye,
   Loader2,
+  PlayCircle,
   RotateCcw,
   Search,
+  ShieldCheck,
   X,
+  XCircle,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
@@ -45,6 +49,12 @@ const primaryActionLabels: Partial<Record<OrderStatus, string>> = {
   "In Progress": "Mark as Completed",
 };
 
+const actionDescriptions: Partial<Record<OrderStatus, string>> = {
+  New: "Confirm that staff have seen this guest request.",
+  Acknowledged: "Move the request into active fulfillment.",
+  "In Progress": "Close the request after the service is delivered.",
+};
+
 interface OrderManagementProps {
   isError: boolean;
   isLoading: boolean;
@@ -70,6 +80,7 @@ export function OrderManagement({
   const now = useMemo(() => new Date(), [orders]);
   const updateStatusMutation = useUpdateOrderStatusMutation();
   const drawerCloseRef = useRef<HTMLButtonElement>(null);
+  const returnFocusRef = useRef<HTMLElement | null>(null);
 
   const filteredOrders = useMemo(() => {
     const searchValue = filters.search.trim().toLocaleLowerCase();
@@ -106,22 +117,23 @@ export function OrderManagement({
     filters.sort !== "newest";
 
   useEffect(() => {
-    if (!selectedOrder) {
-      return;
+    if (selectedOrder) {
+      drawerCloseRef.current?.focus();
     }
-
-    drawerCloseRef.current?.focus();
-
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        setSelectedOrderId(null);
-      }
-    }
-
-    document.addEventListener("keydown", handleKeyDown);
-
-    return () => document.removeEventListener("keydown", handleKeyDown);
   }, [selectedOrder]);
+
+  function openOrderDetails(orderId: string) {
+    returnFocusRef.current =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+    setSelectedOrderId(orderId);
+  }
+
+  function closeOrderDetails() {
+    setSelectedOrderId(null);
+    window.setTimeout(() => returnFocusRef.current?.focus(), 0);
+  }
 
   async function updateOrderStatus(order: Order, nextStatus: OrderStatus) {
     setFeedback(null);
@@ -134,7 +146,7 @@ export function OrderManagement({
 
       setFeedback({
         tone: "success",
-        text: `${updatedOrder.id} moved to ${updatedOrder.status}.`,
+        text: `${updatedOrder.id} moved from ${order.status} to ${updatedOrder.status}.`,
       });
       setCancelOrder(null);
       setSelectedOrderId(updatedOrder.id);
@@ -152,6 +164,8 @@ export function OrderManagement({
   function clearFilters() {
     setFilters(defaultFilters);
   }
+
+  const mutatingOrderId = updateStatusMutation.variables?.orderId ?? null;
 
   if (isLoading) {
     return <OrderManagementSkeleton />;
@@ -315,13 +329,14 @@ export function OrderManagement({
                 {filteredOrders.map((order) => (
                   <OrderTableRow
                     key={order.id}
-                    isMutating={updateStatusMutation.isPending}
+                    isMutating={mutatingOrderId === order.id}
+                    isUpdatingAnyOrder={updateStatusMutation.isPending}
                     now={now}
                     onCancel={() => setCancelOrder(order)}
                     onPrimaryAction={(nextStatus) =>
                       updateOrderStatus(order, nextStatus)
                     }
-                    onView={() => setSelectedOrderId(order.id)}
+                    onView={() => openOrderDetails(order.id)}
                     order={order}
                   />
                 ))}
@@ -332,13 +347,14 @@ export function OrderManagement({
             {filteredOrders.map((order) => (
               <OrderMobileCard
                 key={order.id}
-                isMutating={updateStatusMutation.isPending}
+                isMutating={mutatingOrderId === order.id}
+                isUpdatingAnyOrder={updateStatusMutation.isPending}
                 now={now}
                 onCancel={() => setCancelOrder(order)}
                 onPrimaryAction={(nextStatus) =>
                   updateOrderStatus(order, nextStatus)
                 }
-                onView={() => setSelectedOrderId(order.id)}
+                onView={() => openOrderDetails(order.id)}
                 order={order}
               />
             ))}
@@ -349,10 +365,11 @@ export function OrderManagement({
       {selectedOrder ? (
         <OrderDetailsDrawer
           closeButtonRef={drawerCloseRef}
-          isMutating={updateStatusMutation.isPending}
+          isMutating={mutatingOrderId === selectedOrder.id}
+          isUpdatingAnyOrder={updateStatusMutation.isPending}
           now={now}
           onCancel={() => setCancelOrder(selectedOrder)}
-          onClose={() => setSelectedOrderId(null)}
+          onClose={closeOrderDetails}
           onPrimaryAction={(nextStatus) =>
             updateOrderStatus(selectedOrder, nextStatus)
           }
@@ -417,6 +434,7 @@ function SelectField({
 
 function OrderTableRow({
   isMutating,
+  isUpdatingAnyOrder,
   now,
   onCancel,
   onPrimaryAction,
@@ -424,6 +442,7 @@ function OrderTableRow({
   order,
 }: {
   isMutating: boolean;
+  isUpdatingAnyOrder: boolean;
   now: Date;
   onCancel: () => void;
   onPrimaryAction: (nextStatus: OrderStatus) => void;
@@ -476,16 +495,19 @@ function OrderTableRow({
           {nextStatus ? (
             <Button
               className="min-w-32 px-3"
-              disabled={isMutating}
+              disabled={isUpdatingAnyOrder}
               onClick={() => onPrimaryAction(nextStatus)}
             >
+              {isMutating ? (
+                <Loader2 className="mr-2 size-4 animate-spin" aria-hidden="true" />
+              ) : null}
               {primaryActionLabels[order.status]}
             </Button>
           ) : null}
           {!isFinalOrderStatus(order.status) ? (
             <Button
               className="px-3 text-red-700 hover:bg-red-50"
-              disabled={isMutating}
+              disabled={isUpdatingAnyOrder}
               onClick={onCancel}
               variant="secondary"
             >
@@ -500,6 +522,7 @@ function OrderTableRow({
 
 function OrderMobileCard({
   isMutating,
+  isUpdatingAnyOrder,
   now,
   onCancel,
   onPrimaryAction,
@@ -507,6 +530,7 @@ function OrderMobileCard({
   order,
 }: {
   isMutating: boolean;
+  isUpdatingAnyOrder: boolean;
   now: Date;
   onCancel: () => void;
   onPrimaryAction: (nextStatus: OrderStatus) => void;
@@ -550,16 +574,19 @@ function OrderMobileCard({
         {nextStatus ? (
           <Button
             className="px-3"
-            disabled={isMutating}
+            disabled={isUpdatingAnyOrder}
             onClick={() => onPrimaryAction(nextStatus)}
           >
+            {isMutating ? (
+              <Loader2 className="mr-2 size-4 animate-spin" aria-hidden="true" />
+            ) : null}
             {primaryActionLabels[order.status]}
           </Button>
         ) : null}
         {!isFinalOrderStatus(order.status) ? (
           <Button
             className="px-3 text-red-700 hover:bg-red-50"
-            disabled={isMutating}
+            disabled={isUpdatingAnyOrder}
             onClick={onCancel}
             variant="secondary"
           >
@@ -574,6 +601,7 @@ function OrderMobileCard({
 function OrderDetailsDrawer({
   closeButtonRef,
   isMutating,
+  isUpdatingAnyOrder,
   now,
   onCancel,
   onClose,
@@ -582,6 +610,7 @@ function OrderDetailsDrawer({
 }: {
   closeButtonRef: React.RefObject<HTMLButtonElement>;
   isMutating: boolean;
+  isUpdatingAnyOrder: boolean;
   now: Date;
   onCancel: () => void;
   onClose: () => void;
@@ -601,18 +630,38 @@ function OrderDetailsDrawer({
       role="presentation"
     >
       <aside
-        aria-label={`Details for ${order.id}`}
+        aria-describedby="order-details-description"
+        aria-labelledby="order-details-title"
         className="ml-auto flex h-full w-full max-w-xl flex-col bg-surface shadow-2xl"
         role="dialog"
         aria-modal="true"
+        onKeyDown={(event) => {
+          if (event.key === "Escape") {
+            onClose();
+          }
+        }}
       >
         <div className="flex items-start justify-between gap-4 border-b border-border p-5">
           <div>
-            <p className="text-sm font-semibold text-primary">{order.id}</p>
-            <h3 className="mt-1 text-xl font-semibold text-foreground">
+            <p className="text-sm font-semibold text-primary">
+              {order.id}
+              {isMutating ? (
+                <span className="ml-2 inline-flex items-center gap-1 text-muted-foreground">
+                  <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
+                  Updating
+                </span>
+              ) : null}
+            </p>
+            <h3
+              className="mt-1 text-xl font-semibold text-foreground"
+              id="order-details-title"
+            >
               {order.guestName}
             </h3>
-            <p className="mt-1 text-sm text-muted-foreground">
+            <p
+              className="mt-1 text-sm text-muted-foreground"
+              id="order-details-description"
+            >
               Room {order.roomNumber} · {order.service}
             </p>
           </div>
@@ -623,6 +672,10 @@ function OrderDetailsDrawer({
 
         <div className="flex-1 overflow-y-auto p-5">
           <div className="grid gap-3 sm:grid-cols-2">
+            <Info label="Order ID" value={order.id} />
+            <Info label="Guest" value={order.guestName} />
+            <Info label="Room" value={order.roomNumber} />
+            <Info label="Service" value={order.service} />
             <Info label="Quantity" value={String(order.quantity)} />
             <Info label="Amount" value={formatCurrency(order.amount, order.currency)} />
             <Info label="Order time" value={formatDateTime(order.orderTime)} />
@@ -656,6 +709,12 @@ function OrderDetailsDrawer({
               </p>
             )}
           </div>
+
+          <ActionPanel
+            isMutating={isMutating}
+            nextStatus={nextStatus}
+            order={order}
+          />
         </div>
 
         <div className="border-t border-border p-5">
@@ -666,7 +725,7 @@ function OrderDetailsDrawer({
             {!isFinalOrderStatus(order.status) ? (
               <Button
                 className="text-red-700 hover:bg-red-50"
-                disabled={isMutating}
+                disabled={isUpdatingAnyOrder}
                 onClick={onCancel}
                 variant="secondary"
               >
@@ -675,7 +734,7 @@ function OrderDetailsDrawer({
             ) : null}
             {nextStatus ? (
               <Button
-                disabled={isMutating}
+                disabled={isUpdatingAnyOrder}
                 onClick={() => onPrimaryAction(nextStatus)}
               >
                 {isMutating ? (
@@ -691,6 +750,90 @@ function OrderDetailsDrawer({
   );
 }
 
+function ActionPanel({
+  isMutating,
+  nextStatus,
+  order,
+}: {
+  isMutating: boolean;
+  nextStatus: OrderStatus | null;
+  order: Order;
+}) {
+  if (!nextStatus) {
+    return (
+      <div className="mt-5 rounded-md border border-border bg-muted/60 p-4">
+        <p className="text-xs font-semibold uppercase text-muted-foreground">
+          Available Actions
+        </p>
+        <div className="mt-3 flex items-start gap-3">
+          <ShieldCheck className="mt-0.5 size-5 shrink-0 text-emerald-700" />
+          <div>
+            <p className="text-sm font-semibold text-foreground">
+              No further workflow actions
+            </p>
+            <p className="mt-1 text-sm leading-6 text-muted-foreground">
+              {order.status === "Completed"
+                ? "This request is complete and remains available for review."
+                : "This request is cancelled and cannot be moved back into the active workflow."}
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-5 rounded-md border border-border p-4">
+      <p className="text-xs font-semibold uppercase text-muted-foreground">
+        Available Actions
+      </p>
+      <div className="mt-3 space-y-3">
+        <div className="flex items-start gap-3">
+          <ActionIcon status={order.status} />
+          <div>
+            <p className="text-sm font-semibold text-foreground">
+              {primaryActionLabels[order.status]} → {nextStatus}
+            </p>
+            <p className="mt-1 text-sm leading-6 text-muted-foreground">
+              {actionDescriptions[order.status]}
+            </p>
+          </div>
+        </div>
+        <div className="flex items-start gap-3">
+          <XCircle className="mt-0.5 size-5 shrink-0 text-red-700" />
+          <div>
+            <p className="text-sm font-semibold text-foreground">
+              Cancel → Cancelled
+            </p>
+            <p className="mt-1 text-sm leading-6 text-muted-foreground">
+              Requires confirmation and is only available while the order is not
+              final.
+            </p>
+          </div>
+        </div>
+        {isMutating ? (
+          <p className="inline-flex items-center gap-2 rounded-md border border-primary/20 bg-primary/5 px-2 py-1 text-sm font-semibold text-primary">
+            <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+            Updating {order.id}
+          </p>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function ActionIcon({ status }: { status: OrderStatus }) {
+  if (status === "New") {
+    return <ClipboardCheck className="mt-0.5 size-5 shrink-0 text-primary" />;
+  }
+
+  if (status === "Acknowledged") {
+    return <PlayCircle className="mt-0.5 size-5 shrink-0 text-primary" />;
+  }
+
+  return <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-primary" />;
+}
+
 function CancelDialog({
   isMutating,
   onClose,
@@ -702,11 +845,32 @@ function CancelDialog({
   onConfirm: () => void;
   order: Order;
 }) {
+  const returnButtonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    returnButtonRef.current?.focus();
+  }, []);
+
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/50 p-4">
+    <div
+      className="fixed inset-0 z-50 grid place-items-center bg-slate-950/50 p-4"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget && !isMutating) {
+          onClose();
+        }
+      }}
+      role="presentation"
+    >
       <div
+        aria-describedby="cancel-order-description"
+        aria-labelledby="cancel-order-title"
         aria-modal="true"
         className="w-full max-w-md rounded-lg bg-surface p-5 shadow-2xl"
+        onKeyDown={(event) => {
+          if (event.key === "Escape" && !isMutating) {
+            onClose();
+          }
+        }}
         role="alertdialog"
       >
         <div className="flex items-start gap-3">
@@ -714,10 +878,16 @@ function CancelDialog({
             <AlertTriangle className="size-5" aria-hidden="true" />
           </div>
           <div>
-            <h3 className="text-lg font-semibold text-foreground">
+            <h3
+              className="text-lg font-semibold text-foreground"
+              id="cancel-order-title"
+            >
               Cancel {order.id}?
             </h3>
-            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+            <p
+              className="mt-2 text-sm leading-6 text-muted-foreground"
+              id="cancel-order-description"
+            >
               This will close the request for {order.guestName} in room{" "}
               {order.roomNumber}. The order cannot move through the active
               workflow after cancellation.
@@ -725,7 +895,12 @@ function CancelDialog({
           </div>
         </div>
         <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:justify-end">
-          <Button disabled={isMutating} onClick={onClose} variant="secondary">
+          <Button
+            disabled={isMutating}
+            onClick={onClose}
+            ref={returnButtonRef}
+            variant="secondary"
+          >
             Return
           </Button>
           <Button
