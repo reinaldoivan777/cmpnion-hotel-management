@@ -16,6 +16,7 @@ Hotel staff need one place to understand current workload, identify overdue requ
 - Search by guest name, order ID, or room number.
 - Filters for order status and service type.
 - Newest/oldest sorting by order time.
+- URL query parameters for shareable search, filters, and sort state.
 - Desktop order table and mobile/tablet order cards.
 - Order details drawer with complete request context.
 - Valid lifecycle actions only: `New -> Acknowledged -> In Progress -> Completed`.
@@ -59,13 +60,30 @@ The app is organized around feature folders and a thin app shell:
 - `src/app`: providers, query client, and router.
 - `src/components`: reusable layout and UI primitives.
 - `src/features/dashboard`: dashboard selectors, metric cards, and top-services UI.
-- `src/features/orders`: domain constants, schema, types, selectors, mock API, hooks, utilities, and order management UI.
+- `src/features/orders`: domain constants, schema, types, selectors, URL-state helpers, mock API, hooks, utilities, and order management UI.
 - `src/mocks`: local order dataset.
 - `test`: Bun unit tests for business logic and mock API failure scenarios.
 
 ## State Management
 
-TanStack Query owns async order state, loading/error states, caching, retries, and mutation updates. Local React state is used for UI-only concerns such as search/filter inputs, selected order, cancellation dialog state, and feedback messages. Derived values such as metrics, filtered orders, SLA state, and status actions are calculated from order data rather than duplicated in state.
+TanStack Query owns async order state, loading/error states, caching, retries, and mutation updates. React Router search parameters own order discovery state: search, status filter, service filter, and sort. Local React state is used for UI-only concerns such as selected order, cancellation dialog state, and feedback messages. Derived values such as metrics, filtered orders, SLA state, and status actions are calculated from order data rather than duplicated in state.
+
+## URL State
+
+The dashboard supports shareable and refresh-safe order discovery URLs:
+
+```text
+/dashboard?search=204&status=New&service=Room%20Service&sort=oldest
+```
+
+Supported query parameters:
+
+- `search`: guest name, order ID, or room number.
+- `status`: `All`, `New`, `Acknowledged`, `In Progress`, `Completed`, or `Cancelled`.
+- `service`: `All`, `Room Service`, `Housekeeping`, `Laundry`, `Extra Bed`, or `Spa & Massage`.
+- `sort`: `newest` or `oldest`.
+
+Default values are omitted from the URL. Invalid query values fall back to defaults so malformed URLs do not break the dashboard.
 
 ## Mock API Strategy
 
@@ -109,7 +127,7 @@ The dashboard uses stacked layouts on small screens, two- and three-column metri
 ## Trade-offs
 
 - The app uses local mock data instead of a production backend.
-- Filters are local component state rather than URL parameters.
+- Query parameters are validated with lightweight helper functions rather than a router-level schema.
 - The order list is client-side filtered and sorted, which is suitable for the current mock dataset but not large production volumes.
 - Toasts are implemented as inline live feedback instead of adding a separate notification dependency.
 - The UI avoids authentication and role-based permissions because they are outside the take-home scope.
@@ -120,12 +138,10 @@ The dashboard uses stacked layouts on small screens, two- and three-column metri
 - No authentication or authorization.
 - No pagination or virtualization for large datasets.
 - No real-time order notifications.
-- No URL-synchronized search or filters.
 - Component interaction tests are limited by the current no-DOM Bun test setup.
 
 ## Future Improvements
 
-- Add URL query parameters for search, filters, and sort.
 - Add pagination or table virtualization.
 - Add a production API layer and real persistence.
 - Add real-time notifications for new and overdue orders.
