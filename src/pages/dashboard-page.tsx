@@ -38,8 +38,9 @@ export function DashboardPage() {
       </section>
 
       <section
+        aria-busy={ordersQuery.isLoading}
         aria-label="Operational metrics"
-        className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5"
+        className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5"
       >
         {ordersQuery.isLoading
           ? Array.from({ length: 5 }, (_, index) => (
@@ -50,7 +51,7 @@ export function DashboardPage() {
             ))}
       </section>
 
-      <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+      <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
         <OrderManagement
           isError={ordersQuery.isError}
           isLoading={ordersQuery.isLoading}
