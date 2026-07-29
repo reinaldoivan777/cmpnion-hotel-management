@@ -2,6 +2,8 @@ import {
   AlertTriangle,
   CheckCircle2,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   ClipboardCheck,
   Clock3,
   Eye,
@@ -64,6 +66,9 @@ const actionDescriptions: Partial<Record<OrderStatus, string>> = {
   "In Progress": "Close the request after the service is delivered.",
 };
 
+const orderPageSizeOptions = [8, 10, 20, 50] as const;
+const defaultOrdersPageSize = 10;
+
 interface OrderManagementProps {
   isError: boolean;
   isLoading: boolean;
@@ -122,6 +127,8 @@ export function OrderManagement({
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [cancelOrder, setCancelOrder] = useState<Order | null>(null);
   const [feedback, setFeedback] = useState<FeedbackMessage | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(defaultOrdersPageSize);
   const now = useMemo(() => new Date(), [orders]);
   const updateStatusMutation = useUpdateOrderStatusMutation();
   const drawerCloseRef = useRef<HTMLButtonElement>(null);
@@ -139,12 +146,32 @@ export function OrderManagement({
 
   const selectedOrder = orders.find((order) => order.id === selectedOrderId);
   const hasActiveFilters = hasActiveOrderFilters(filters);
+  const pageCount = Math.max(
+    1,
+    Math.ceil(filteredOrders.length / pageSize),
+  );
+  const activePage = Math.min(currentPage, pageCount);
+  const pageStartIndex = (activePage - 1) * pageSize;
+  const paginatedOrders = filteredOrders.slice(
+    pageStartIndex,
+    pageStartIndex + pageSize,
+  );
+  const visibleOrderStart = filteredOrders.length === 0 ? 0 : pageStartIndex + 1;
+  const visibleOrderEnd = Math.min(
+    pageStartIndex + paginatedOrders.length,
+    filteredOrders.length,
+  );
+  const showPaginationControls = filteredOrders.length > orderPageSizeOptions[0];
 
   useEffect(() => {
     if (selectedOrder) {
       drawerCloseRef.current?.focus();
     }
   }, [selectedOrder]);
+
+  useEffect(() => {
+    setCurrentPage((page) => Math.min(page, pageCount));
+  }, [pageCount]);
 
   function openOrderDetails(orderId: string) {
     returnFocusRef.current =
@@ -199,12 +226,14 @@ export function OrderManagement({
   }
 
   function clearFilters() {
+    setCurrentPage(1);
     setSearchParams(serializeOrderFiltersToSearchParams(defaultOrderFilters), {
       replace: true,
     });
   }
 
   function updateFilters(nextFilters: OrderFilters) {
+    setCurrentPage(1);
     setSearchParams(serializeOrderFiltersToSearchParams(nextFilters), {
       replace: true,
     });
@@ -260,11 +289,6 @@ export function OrderManagement({
             >
               Guest Service Orders
             </h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {orders.length === 0
-                ? "No orders yet. New guest requests will appear here."
-                : `${filteredOrders.length} of ${orders.length} orders shown`}
-            </p>
           </div>
           {hasActiveFilters ? (
             <Button variant="secondary" onClick={clearFilters}>
@@ -403,7 +427,7 @@ export function OrderManagement({
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {filteredOrders.map((order) => (
+                {paginatedOrders.map((order) => (
                   <OrderTableRow
                     key={order.id}
                     isMutating={mutatingOrderId === order.id}
@@ -421,7 +445,7 @@ export function OrderManagement({
             </table>
           </div>
           <div className="divide-y divide-border xl:hidden" id="orders-results">
-            {filteredOrders.map((order) => (
+            {paginatedOrders.map((order) => (
               <OrderMobileCard
                 key={order.id}
                 isMutating={mutatingOrderId === order.id}
@@ -436,6 +460,20 @@ export function OrderManagement({
               />
             ))}
           </div>
+          <PaginationControls
+            currentPage={activePage}
+            endItem={visibleOrderEnd}
+            isVisible={showPaginationControls}
+            onPageChange={setCurrentPage}
+            onPageSizeChange={(nextPageSize) => {
+              setPageSize(nextPageSize);
+              setCurrentPage(1);
+            }}
+            pageCount={pageCount}
+            pageSize={pageSize}
+            startItem={visibleOrderStart}
+            totalItems={filteredOrders.length}
+          />
         </>
       )}
 
@@ -464,6 +502,145 @@ export function OrderManagement({
       ) : null}
     </section>
   );
+}
+
+function PaginationControls({
+  currentPage,
+  endItem,
+  isVisible,
+  onPageChange,
+  onPageSizeChange,
+  pageCount,
+  pageSize,
+  startItem,
+  totalItems,
+}: {
+  currentPage: number;
+  endItem: number;
+  isVisible: boolean;
+  onPageChange: (page: number) => void;
+  onPageSizeChange: (pageSize: number) => void;
+  pageCount: number;
+  pageSize: number;
+  startItem: number;
+  totalItems: number;
+}) {
+  if (!isVisible) {
+    return null;
+  }
+
+  const paginationItems = getPaginationItems(currentPage, pageCount);
+
+  return (
+    <nav
+      aria-label="Order table pagination"
+      className="flex flex-col gap-3 border-t border-border px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5"
+    >
+      <p className="text-sm text-muted-foreground" aria-live="polite">
+        Showing {startItem}-{endItem} of {totalItems}
+      </p>
+      <div className="flex flex-col gap-3 min-[420px]:flex-row min-[420px]:items-center">
+        <label className="flex items-center gap-2 text-sm text-muted-foreground">
+          <span>Rows</span>
+          <span className="relative block">
+            <select
+              aria-label="Rows per page"
+              className="h-10 appearance-none rounded-md border border-border bg-surface pl-3 pr-8 text-sm font-semibold text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+              onChange={(event) => onPageSizeChange(Number(event.target.value))}
+              value={pageSize}
+            >
+              {orderPageSizeOptions.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+            <ChevronDown
+              className="pointer-events-none absolute right-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+              aria-hidden="true"
+            />
+          </span>
+        </label>
+        <div className="flex items-center gap-2">
+          <IconButton
+            disabled={currentPage === 1}
+            label="Previous page"
+            onClick={() => onPageChange(currentPage - 1)}
+          >
+            <ChevronLeft className="size-4" aria-hidden="true" />
+          </IconButton>
+          <div className="hidden items-center gap-1 sm:flex">
+            {paginationItems.map((item) =>
+              typeof item === "number" ? (
+                <button
+                  aria-current={item === currentPage ? "page" : undefined}
+                  aria-label={`Page ${item}`}
+                  className={cn(
+                    "inline-flex size-10 items-center justify-center rounded-md border border-border text-sm font-semibold transition hover:bg-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary",
+                    item === currentPage
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-surface text-foreground",
+                  )}
+                  key={item}
+                  onClick={() => onPageChange(item)}
+                  type="button"
+                >
+                  {item}
+                </button>
+              ) : (
+                <span
+                  aria-hidden="true"
+                  className="inline-flex size-10 items-center justify-center text-sm font-semibold text-muted-foreground"
+                  key={item}
+                >
+                  ...
+                </span>
+              ),
+            )}
+          </div>
+          <span className="text-sm font-semibold text-foreground sm:hidden">
+            Page {currentPage} of {pageCount}
+          </span>
+          <IconButton
+            disabled={currentPage === pageCount}
+            label="Next page"
+            onClick={() => onPageChange(currentPage + 1)}
+          >
+            <ChevronRight className="size-4" aria-hidden="true" />
+          </IconButton>
+        </div>
+      </div>
+    </nav>
+  );
+}
+
+function getPaginationItems(
+  currentPage: number,
+  pageCount: number,
+): Array<number | "start-ellipsis" | "end-ellipsis"> {
+  if (pageCount <= 7) {
+    return Array.from({ length: pageCount }, (_, index) => index + 1);
+  }
+
+  const middleStart = Math.max(2, currentPage - 1);
+  const middleEnd = Math.min(pageCount - 1, currentPage + 1);
+  const items: Array<number | "start-ellipsis" | "end-ellipsis"> = [1];
+
+  if (middleStart > 2) {
+    items.push("start-ellipsis");
+  }
+
+  for (let page = middleStart; page <= middleEnd; page += 1) {
+    items.push(page);
+  }
+
+  if (middleEnd < pageCount - 1) {
+    items.push("end-ellipsis");
+  }
+
+  items.push(pageCount);
+
+  return items;
 }
 
 function SelectField({
