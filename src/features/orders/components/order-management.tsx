@@ -31,6 +31,7 @@ import {
   SERVICE_TYPES,
 } from "@/features/orders/orders.constants";
 import { useUpdateOrderStatusMutation } from "@/features/orders/hooks/use-orders";
+import { selectFilteredOrders } from "@/features/orders/orders.selectors";
 import type {
   Order,
   OrderFilters,
@@ -127,32 +128,10 @@ export function OrderManagement({
   const returnFocusRef = useRef<HTMLElement | null>(null);
   const cancelReturnFocusRef = useRef<HTMLElement | null>(null);
 
-  const filteredOrders = useMemo(() => {
-    const searchValue = filters.search.trim().toLocaleLowerCase();
-
-    return orders
-      .filter((order) => {
-        const matchesSearch =
-          searchValue.length === 0 ||
-          order.guestName.toLocaleLowerCase().includes(searchValue) ||
-          order.id.toLocaleLowerCase().includes(searchValue) ||
-          order.roomNumber.toLocaleLowerCase().includes(searchValue);
-
-        return (
-          matchesSearch &&
-          (filters.status === "All" || order.status === filters.status) &&
-          (filters.service === "All" || order.service === filters.service)
-        );
-      })
-      .sort((orderA, orderB) => {
-        const orderATime = new Date(orderA.orderTime).getTime();
-        const orderBTime = new Date(orderB.orderTime).getTime();
-
-        return filters.sort === "newest"
-          ? orderBTime - orderATime
-          : orderATime - orderBTime;
-      });
-  }, [filters, orders]);
+  const filteredOrders = useMemo(
+    () => selectFilteredOrders(orders, filters),
+    [filters, orders],
+  );
 
   const selectedOrder = orders.find((order) => order.id === selectedOrderId);
   const hasActiveFilters =
