@@ -1,6 +1,14 @@
 import { mockOrders } from "@/mocks/data/orders";
+import { selectDashboardOverview } from "@/features/dashboard/dashboard.selectors";
 import { orderSchema, ordersSchema } from "@/features/orders/orders.schema";
-import type { Order, OrderStatus } from "@/features/orders/orders.types";
+import { selectFilteredOrders } from "@/features/orders/orders.selectors";
+import type { DashboardOverview } from "@/features/dashboard/dashboard.types";
+import type {
+  Order,
+  OrderListParams,
+  OrderListResponse,
+  OrderStatus,
+} from "@/features/orders/orders.types";
 import { canTransition } from "@/features/orders/orders.utils";
 
 const READ_DELAY_RANGE_MS = [500, 800] as const;
@@ -24,6 +32,10 @@ function cloneOrder(order: Order): Order {
 
 function cloneOrders(orders: Order[]): Order[] {
   return structuredClone(orders);
+}
+
+function cloneDashboardOverview(overview: DashboardOverview): DashboardOverview {
+  return structuredClone(overview);
 }
 
 function randomDelay([min, max]: readonly [number, number]): Promise<void> {
@@ -57,14 +69,45 @@ export function resetMockOrders(): void {
   failureState.failNextMutation = false;
 }
 
-export async function getOrders(): Promise<Order[]> {
+export async function getOrdersPage({
+  filters,
+  page,
+  pageSize,
+}: OrderListParams): Promise<OrderListResponse> {
   await randomDelay(READ_DELAY_RANGE_MS);
 
   if (consumeFailure("failNextRead")) {
     throw new Error("Unable to load orders.");
   }
 
-  return ordersSchema.parse(cloneOrders(ordersStore));
+  const safePage = Math.max(1, Math.floor(page));
+  const safePageSize = Math.max(1, Math.floor(pageSize));
+  const filteredOrders = selectFilteredOrders(ordersStore, filters);
+  const total = filteredOrders.length;
+  const maxPage = Math.max(1, Math.ceil(total / safePageSize));
+  const resolvedPage = Math.min(safePage, maxPage);
+  const startIndex = (resolvedPage - 1) * safePageSize;
+  const pageOrders = filteredOrders.slice(
+    startIndex,
+    startIndex + safePageSize,
+  );
+
+  return {
+    orders: ordersSchema.parse(cloneOrders(pageOrders)),
+    page: resolvedPage,
+    pageSize: safePageSize,
+    total,
+  };
+}
+
+export async function getDashboardOverview(): Promise<DashboardOverview> {
+  await randomDelay(READ_DELAY_RANGE_MS);
+
+  if (consumeFailure("failNextRead")) {
+    throw new Error("Unable to load dashboard overview.");
+  }
+
+  return cloneDashboardOverview(selectDashboardOverview(ordersStore));
 }
 
 export async function getOrderById(orderId: string): Promise<Order> {

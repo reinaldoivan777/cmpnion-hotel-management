@@ -30,3 +30,16 @@ export interface OrderFilters {
   service: ServiceType | "All";
   sort: "newest" | "oldest";
 }
+
+export interface OrderListParams {
+  filters: OrderFilters;
+  page: number;
+  pageSize: number;
+}
+
+export interface OrderListResponse {
+  orders: Order[];
+  page: number;
+  pageSize: number;
+  total: number;
+}

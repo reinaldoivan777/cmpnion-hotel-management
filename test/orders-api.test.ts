@@ -3,11 +3,13 @@ import { beforeEach, describe, expect, test } from "bun:test";
 import {
   failNextOrderMutation,
   failNextOrdersRead,
+  getDashboardOverview,
   getOrderById,
-  getOrders,
+  getOrdersPage,
   resetMockOrders,
   updateOrderStatus,
 } from "@/features/orders/api/orders-api";
+import { defaultOrderFilters } from "@/features/orders/orders.url-state";
 
 describe("orders mock API failure scenarios", () => {
   beforeEach(() => {
@@ -17,10 +19,65 @@ describe("orders mock API failure scenarios", () => {
   test("fails the next read once and then succeeds on retry", async () => {
     failNextOrdersRead();
 
-    await expect(getOrders()).rejects.toThrow("Unable to load orders.");
+    await expect(
+      getOrdersPage({
+        filters: defaultOrderFilters,
+        page: 1,
+        pageSize: 10,
+      }),
+    ).rejects.toThrow("Unable to load orders.");
 
-    const retryOrders = await getOrders();
-    expect(retryOrders.length).toBeGreaterThan(0);
+    const retryOrders = await getOrdersPage({
+      filters: defaultOrderFilters,
+      page: 1,
+      pageSize: 10,
+    });
+    expect(retryOrders.orders.length).toBeGreaterThan(0);
+  });
+
+  test("returns a server-side order page with total metadata", async () => {
+    const orderPage = await getOrdersPage({
+      filters: defaultOrderFilters,
+      page: 2,
+      pageSize: 20,
+    });
+
+    expect(orderPage.page).toBe(2);
+    expect(orderPage.pageSize).toBe(20);
+    expect(orderPage.total).toBe(150);
+    expect(orderPage.orders).toHaveLength(20);
+  });
+
+  test("applies filters before paginating order results", async () => {
+    const orderPage = await getOrdersPage({
+      filters: {
+        ...defaultOrderFilters,
+        status: "New",
+      },
+      page: 1,
+      pageSize: 50,
+    });
+
+    expect(orderPage.total).toBeGreaterThan(0);
+    expect(orderPage.orders.every((order) => order.status === "New")).toBe(true);
+  });
+
+  test("normalizes out-of-range pages to the last available page", async () => {
+    const orderPage = await getOrdersPage({
+      filters: defaultOrderFilters,
+      page: 999,
+      pageSize: 50,
+    });
+
+    expect(orderPage.page).toBe(3);
+    expect(orderPage.orders.at(-1)?.id).toBe("ORD-1150");
+  });
+
+  test("returns dashboard overview without requiring a full order list client fetch", async () => {
+    const overview = await getDashboardOverview();
+
+    expect(overview.metrics).toHaveLength(5);
+    expect(overview.topServices.length).toBeGreaterThan(0);
   });
 
   test("fails the next mutation once and preserves the previous status", async () => {

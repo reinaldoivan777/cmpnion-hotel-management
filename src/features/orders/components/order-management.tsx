@@ -33,8 +33,10 @@ import {
   ORDER_STATUSES,
   SERVICE_TYPES,
 } from "@/features/orders/orders.constants";
-import { useUpdateOrderStatusMutation } from "@/features/orders/hooks/use-orders";
-import { selectFilteredOrders } from "@/features/orders/orders.selectors";
+import {
+  useOrdersPageQuery,
+  useUpdateOrderStatusMutation,
+} from "@/features/orders/hooks/use-orders";
 import type {
   Order,
   OrderFilters,
@@ -70,10 +72,7 @@ const orderPageSizeOptions = [8, 10, 20, 50] as const;
 const defaultOrdersPageSize = 10;
 
 interface OrderManagementProps {
-  isError: boolean;
-  isLoading: boolean;
-  onRetry: () => void;
-  orders: Order[];
+  className?: string;
 }
 
 interface FeedbackMessage {
@@ -117,19 +116,13 @@ function trapFocus(event: KeyboardEvent<HTMLElement>) {
   }
 }
 
-export function OrderManagement({
-  isError,
-  isLoading,
-  onRetry,
-  orders,
-}: OrderManagementProps) {
+export function OrderManagement({ className }: OrderManagementProps) {
   const [searchParams, setSearchParams] = useSearchParams();
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [cancelOrder, setCancelOrder] = useState<Order | null>(null);
   const [feedback, setFeedback] = useState<FeedbackMessage | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(defaultOrdersPageSize);
-  const now = useMemo(() => new Date(), [orders]);
   const updateStatusMutation = useUpdateOrderStatusMutation();
   const drawerCloseRef = useRef<HTMLButtonElement>(null);
   const returnFocusRef = useRef<HTMLElement | null>(null);
@@ -139,29 +132,27 @@ export function OrderManagement({
     () => parseOrderFiltersFromSearchParams(searchParams),
     [searchParams],
   );
-  const filteredOrders = useMemo(
-    () => selectFilteredOrders(orders, filters),
-    [filters, orders],
+  const orderListParams = useMemo(
+    () => ({
+      filters,
+      page: currentPage,
+      pageSize,
+    }),
+    [currentPage, filters, pageSize],
   );
+  const ordersQuery = useOrdersPageQuery(orderListParams);
+  const orders = ordersQuery.data?.orders ?? [];
+  const totalOrders = ordersQuery.data?.total ?? 0;
+  const now = useMemo(() => new Date(), [orders]);
 
   const selectedOrder = orders.find((order) => order.id === selectedOrderId);
   const hasActiveFilters = hasActiveOrderFilters(filters);
-  const pageCount = Math.max(
-    1,
-    Math.ceil(filteredOrders.length / pageSize),
-  );
+  const pageCount = Math.max(1, Math.ceil(totalOrders / pageSize));
   const activePage = Math.min(currentPage, pageCount);
   const pageStartIndex = (activePage - 1) * pageSize;
-  const paginatedOrders = filteredOrders.slice(
-    pageStartIndex,
-    pageStartIndex + pageSize,
-  );
-  const visibleOrderStart = filteredOrders.length === 0 ? 0 : pageStartIndex + 1;
-  const visibleOrderEnd = Math.min(
-    pageStartIndex + paginatedOrders.length,
-    filteredOrders.length,
-  );
-  const showPaginationControls = filteredOrders.length > orderPageSizeOptions[0];
+  const visibleOrderStart = totalOrders === 0 ? 0 : pageStartIndex + 1;
+  const visibleOrderEnd = Math.min(pageStartIndex + orders.length, totalOrders);
+  const showPaginationControls = totalOrders > orderPageSizeOptions[0];
 
   useEffect(() => {
     if (selectedOrder) {
@@ -241,15 +232,18 @@ export function OrderManagement({
 
   const mutatingOrderId = updateStatusMutation.variables?.orderId ?? null;
 
-  if (isLoading) {
+  if (ordersQuery.isLoading) {
     return <OrderManagementSkeleton />;
   }
 
-  if (isError) {
+  if (ordersQuery.isError) {
     return (
       <section
         aria-labelledby="orders-error-title"
-        className="rounded-lg border border-border bg-surface p-6"
+        className={cn(
+          "rounded-lg border border-border bg-surface p-6",
+          className,
+        )}
       >
         <h2 className="text-lg font-semibold text-foreground">
           Guest Service Orders
@@ -265,7 +259,12 @@ export function OrderManagement({
             Unable to load orders.
           </p>
           <p className="mt-1 text-sm text-red-800">Please try again.</p>
-          <Button className="mt-4" onClick={onRetry}>
+          <Button
+            className="mt-4"
+            onClick={() => {
+              void ordersQuery.refetch();
+            }}
+          >
             <RotateCcw className="mr-2 size-4" aria-hidden="true" />
             Retry
           </Button>
@@ -276,9 +275,9 @@ export function OrderManagement({
 
   return (
     <section
-      aria-busy={updateStatusMutation.isPending}
+      aria-busy={updateStatusMutation.isPending || ordersQuery.isFetching}
       aria-labelledby="orders-section-title"
-      className="rounded-lg border border-border bg-surface"
+      className={cn("rounded-lg border border-border bg-surface", className)}
     >
       <div className="border-b border-border p-4 sm:p-5">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
@@ -289,6 +288,11 @@ export function OrderManagement({
             >
               Guest Service Orders
             </h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {totalOrders === 0 && !hasActiveFilters
+                ? "No orders yet. New guest requests will appear here."
+                : `${totalOrders} matching orders`}
+            </p>
           </div>
           {hasActiveFilters ? (
             <Button variant="secondary" onClick={clearFilters}>
@@ -388,12 +392,12 @@ export function OrderManagement({
         ) : null}
       </div>
 
-      {orders.length === 0 ? (
+      {totalOrders === 0 && !hasActiveFilters ? (
         <EmptyState
           title="No orders yet."
           description="New guest requests will appear here."
         />
-      ) : filteredOrders.length === 0 ? (
+      ) : totalOrders === 0 ? (
         <EmptyState
           title="No orders found."
           description="Try changing your search or filters."
@@ -427,7 +431,7 @@ export function OrderManagement({
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {paginatedOrders.map((order) => (
+                {orders.map((order) => (
                   <OrderTableRow
                     key={order.id}
                     isMutating={mutatingOrderId === order.id}
@@ -445,7 +449,7 @@ export function OrderManagement({
             </table>
           </div>
           <div className="divide-y divide-border xl:hidden" id="orders-results">
-            {paginatedOrders.map((order) => (
+            {orders.map((order) => (
               <OrderMobileCard
                 key={order.id}
                 isMutating={mutatingOrderId === order.id}
@@ -472,7 +476,7 @@ export function OrderManagement({
             pageCount={pageCount}
             pageSize={pageSize}
             startItem={visibleOrderStart}
-            totalItems={filteredOrders.length}
+            totalItems={totalOrders}
           />
         </>
       )}
