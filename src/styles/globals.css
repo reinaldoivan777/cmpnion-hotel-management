@@ -14,6 +14,18 @@
   --primary-foreground: 0 0% 100%;
 }
 
+.dark {
+  color-scheme: dark;
+  --background: 222 47% 6%;
+  --foreground: 210 40% 96%;
+  --surface: 222 35% 10%;
+  --muted: 220 24% 16%;
+  --muted-foreground: 215 16% 72%;
+  --border: 218 22% 24%;
+  --primary: 190 85% 42%;
+  --primary-foreground: 222 47% 7%;
+}
+
 * {
   box-sizing: border-box;
 }
