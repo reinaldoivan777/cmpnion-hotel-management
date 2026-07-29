@@ -43,3 +43,12 @@ export interface OrderListResponse {
   pageSize: number;
   total: number;
 }
+
+export type OrderRealtimeEventType = "new-order" | "overdue-order";
+
+export interface OrderRealtimeEvent {
+  id: string;
+  order: Order;
+  occurredAt: string;
+  type: OrderRealtimeEventType;
+}

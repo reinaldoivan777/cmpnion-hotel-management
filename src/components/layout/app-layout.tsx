@@ -31,9 +31,6 @@ export function AppLayout() {
             <IconButton label="Open help">
               <CircleHelp className="size-5" aria-hidden="true" />
             </IconButton>
-            <IconButton label="View notifications">
-              <Bell className="size-5" aria-hidden="true" />
-            </IconButton>
           </div>
         </div>
       </header>

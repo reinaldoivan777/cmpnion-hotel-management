@@ -7,14 +7,24 @@ import {
   TopServicesCardSkeleton,
 } from "@/features/dashboard/components/top-services-card";
 import { OrderManagement } from "@/features/orders/components/order-management";
-import { useDashboardOverviewQuery } from "@/features/orders/hooks/use-orders";
+import { OrderNotifications } from "@/features/orders/components/order-notifications";
+import {
+  useDashboardOverviewQuery,
+  useOrderRealtimeNotifications,
+} from "@/features/orders/hooks/use-orders";
 
 export function DashboardPage() {
   const dashboardOverviewQuery = useDashboardOverviewQuery();
   const dashboardOverview = dashboardOverviewQuery.data;
+  const orderNotifications = useOrderRealtimeNotifications();
 
   return (
     <div className="space-y-6">
+      <OrderNotifications
+        notifications={orderNotifications.notifications}
+        onDismiss={orderNotifications.dismissNotification}
+      />
+
       <section className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
           <p className="text-sm font-medium text-muted-foreground">
