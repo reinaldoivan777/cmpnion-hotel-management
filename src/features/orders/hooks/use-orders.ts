@@ -1,4 +1,9 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQuery,
+  useQueryClient,
+  type QueryKey,
+} from "@tanstack/react-query";
 
 import {
   getDashboardOverview,
@@ -12,6 +17,11 @@ import type {
   OrderListResponse,
   OrderStatus,
 } from "@/features/orders/orders.types";
+
+type OrderListQuerySnapshot = [
+  QueryKey,
+  OrderListResponse | undefined,
+];
 
 export const ordersQueryKeys = {
   all: ["orders"] as const,
@@ -62,17 +72,101 @@ interface UpdateOrderStatusVariables {
   nextStatus: OrderStatus;
 }
 
+interface UpdateOrderStatusContext {
+  previousDetail: Order | undefined;
+  previousOrderLists: OrderListQuerySnapshot[];
+}
+
 export function useUpdateOrderStatusMutation() {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: ({ orderId, nextStatus }: UpdateOrderStatusVariables) =>
       updateOrderStatus(orderId, nextStatus),
+    onMutate: async ({ orderId, nextStatus }) => {
+      await queryClient.cancelQueries({ queryKey: ordersQueryKeys.lists() });
+      await queryClient.cancelQueries({
+        queryKey: ordersQueryKeys.detail(orderId),
+      });
+
+      const previousDetail = queryClient.getQueryData<Order>(
+        ordersQueryKeys.detail(orderId),
+      );
+      const previousOrderLists =
+        queryClient.getQueriesData<OrderListResponse>({
+          queryKey: ordersQueryKeys.lists(),
+        });
+
+      const optimisticOrderFromLists = previousOrderLists
+        .flatMap(([, orderList]) => orderList?.orders ?? [])
+        .find((order) => order.id === orderId);
+      const optimisticOrder = previousDetail ?? optimisticOrderFromLists;
+
+      if (optimisticOrder) {
+        queryClient.setQueryData<Order>(ordersQueryKeys.detail(orderId), {
+          ...optimisticOrder,
+          status: nextStatus,
+        });
+      }
+
+      for (const [queryKey, orderList] of previousOrderLists) {
+        if (!orderList) {
+          continue;
+        }
+
+        queryClient.setQueryData<OrderListResponse>(queryKey, {
+          ...orderList,
+          orders: orderList.orders.map((order) =>
+            order.id === orderId ? { ...order, status: nextStatus } : order,
+          ),
+        });
+      }
+
+      return { previousDetail, previousOrderLists };
+    },
+    onError: (_error, { orderId }, context) => {
+      if (!context) {
+        return;
+      }
+
+      if (context.previousDetail) {
+        queryClient.setQueryData(
+          ordersQueryKeys.detail(orderId),
+          context.previousDetail,
+        );
+      } else {
+        queryClient.removeQueries({
+          exact: true,
+          queryKey: ordersQueryKeys.detail(orderId),
+        });
+      }
+
+      for (const [queryKey, orderList] of context.previousOrderLists) {
+        queryClient.setQueryData(queryKey, orderList);
+      }
+    },
     onSuccess: (updatedOrder: Order) => {
       queryClient.setQueryData(
         ordersQueryKeys.detail(updatedOrder.id),
         updatedOrder,
       );
+      queryClient.setQueriesData<OrderListResponse>(
+        { queryKey: ordersQueryKeys.lists() },
+        (orderList) => {
+          if (!orderList) {
+            return orderList;
+          }
+
+          return {
+            ...orderList,
+            orders: orderList.orders.map((order) =>
+              order.id === updatedOrder.id ? updatedOrder : order,
+            ),
+          };
+        },
+      );
+    },
+    onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: ordersQueryKeys.lists() });
       void queryClient.invalidateQueries({
         queryKey: dashboardQueryKeys.overview,
