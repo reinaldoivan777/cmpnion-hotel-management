@@ -1,9 +1,13 @@
-import { Bell, CircleHelp, Hotel } from "lucide-react";
+import { CircleHelp, Hotel, Moon, Sun } from "lucide-react";
 import { Outlet } from "react-router-dom";
 
+import { useTheme } from "@/app/theme-provider";
 import { IconButton } from "@/components/ui/icon-button";
 
 export function AppLayout() {
+  const { theme, toggleTheme } = useTheme();
+  const isDark = theme === "dark";
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <a
@@ -28,6 +32,16 @@ export function AppLayout() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <IconButton
+              label={isDark ? "Switch to light mode" : "Switch to dark mode"}
+              onClick={toggleTheme}
+            >
+              {isDark ? (
+                <Sun className="size-5" aria-hidden="true" />
+              ) : (
+                <Moon className="size-5" aria-hidden="true" />
+              )}
+            </IconButton>
             <IconButton label="Open help">
               <CircleHelp className="size-5" aria-hidden="true" />
             </IconButton>

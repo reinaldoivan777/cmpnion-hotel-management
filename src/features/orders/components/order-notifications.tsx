@@ -57,8 +57,8 @@ function OrderNotificationToast({
       className={cn(
         "pointer-events-auto rounded-lg border bg-surface p-4 shadow-xl",
         notification.type === "overdue-order"
-          ? "border-amber-300"
-          : "border-emerald-200",
+          ? "border-amber-300 dark:border-amber-800"
+          : "border-emerald-200 dark:border-emerald-800",
       )}
       role="status"
     >
@@ -95,14 +95,14 @@ function NotificationIcon({
 }) {
   if (notification.type === "overdue-order") {
     return (
-      <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md bg-amber-50 text-amber-700">
+      <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-200">
         <AlertTriangle className="size-4" aria-hidden="true" />
       </span>
     );
   }
 
   return (
-    <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md bg-emerald-50 text-emerald-700">
+    <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-200">
       <Bell className="size-4" aria-hidden="true" />
     </span>
   );

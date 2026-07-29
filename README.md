@@ -17,6 +17,7 @@ Hotel staff need one place to understand current workload, identify overdue requ
 - Filters for order status and service type.
 - Newest/oldest sorting by order time.
 - URL query parameters for shareable search, filters, and sort state.
+- Light and dark mode with persisted user preference.
 - Desktop order table and mobile/tablet order cards.
 - Server-side order pagination with selectable page sizes: 8, 10, 20, or 50 orders per page.
 - Order details drawer with complete request context.
@@ -70,6 +71,10 @@ The app is organized around feature folders and a thin app shell:
 ## State Management
 
 TanStack Query owns async order state, loading/error states, caching, retries, paginated list requests, aggregate dashboard requests, and mutation updates. Status mutations optimistically update cached order pages and detail records, snapshot previous cache data, roll back on failure, and revalidate affected list and overview queries after settlement. A mock real-time subscription emits new-order and overdue-order events, updates detail cache entries, and invalidates affected paginated list and dashboard overview queries. React Router search parameters own order discovery state: search, status filter, service filter, and sort. Local React state is used for UI-only concerns such as selected order, cancellation dialog state, current page, page size, transient toast notifications, and feedback messages. Derived values such as metrics, filtered order counts, paginated orders, SLA state, and status actions are calculated from API data rather than duplicated in state.
+
+## Theme
+
+The app supports light and dark mode through CSS theme tokens and Tailwind's class-based dark mode. Light mode uses the original dashboard color palette and is the default for first-time visitors. The selected theme is stored in `localStorage` under `cmpnion-theme`. The header toggle switches modes without affecting URL state or query cache state.
 
 ## URL State
 
