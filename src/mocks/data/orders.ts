@@ -1,0 +1,118 @@
+import type { Order } from "@/features/orders/orders.types";
+
+const now = Date.now();
+
+function minutesAgo(minutes: number): string {
+  return new Date(now - minutes * 60_000).toISOString();
+}
+
+function hoursAgo(hours: number): string {
+  return new Date(now - hours * 60 * 60_000).toISOString();
+}
+
+export const mockOrders: Order[] = [
+  {
+    id: "ORD-1001",
+    guestName: "Maya Chen",
+    roomNumber: "204",
+    service: "Room Service",
+    quantity: 2,
+    amount: 48,
+    currency: "USD",
+    specialRequest: "No onions. Please call before delivery.",
+    orderTime: minutesAgo(22),
+    status: "New",
+    paymentStatus: "Paid",
+  },
+  {
+    id: "ORD-1002",
+    guestName: "Daniel Brooks",
+    roomNumber: "918",
+    service: "Housekeeping",
+    quantity: 1,
+    amount: 0,
+    currency: "USD",
+    specialRequest: "Fresh towels and room refresh.",
+    orderTime: minutesAgo(11),
+    status: "New",
+    paymentStatus: "Pending",
+  },
+  {
+    id: "ORD-1003",
+    guestName: "Sofia Martinez",
+    roomNumber: "502",
+    service: "Laundry",
+    quantity: 4,
+    amount: 36,
+    currency: "USD",
+    specialRequest: null,
+    orderTime: minutesAgo(38),
+    status: "Acknowledged",
+    paymentStatus: "Paid",
+  },
+  {
+    id: "ORD-1004",
+    guestName: "Ethan Wright",
+    roomNumber: "711",
+    service: "Spa & Massage",
+    quantity: 1,
+    amount: 120,
+    currency: "USD",
+    specialRequest: "Prefer female therapist.",
+    orderTime: hoursAgo(1.5),
+    status: "In Progress",
+    paymentStatus: "Failed",
+  },
+  {
+    id: "ORD-1005",
+    guestName: "Aisha Rahman",
+    roomNumber: "305",
+    service: "Extra Bed",
+    quantity: 1,
+    amount: 30,
+    currency: "USD",
+    specialRequest: "Set up before 8 PM.",
+    orderTime: hoursAgo(2),
+    status: "Completed",
+    paymentStatus: "Paid",
+  },
+  {
+    id: "ORD-1006",
+    guestName: "Noah Kim",
+    roomNumber: "1201",
+    service: "Room Service",
+    quantity: 1,
+    amount: 24,
+    currency: "USD",
+    specialRequest: "Leave at door.",
+    orderTime: hoursAgo(3),
+    status: "Cancelled",
+    paymentStatus: "Pending",
+  },
+  {
+    id: "ORD-1007",
+    guestName: "Priya Shah",
+    roomNumber: "407",
+    service: "Laundry",
+    quantity: 2,
+    amount: 18,
+    currency: "USD",
+    specialRequest: "Express service requested.",
+    orderTime: minutesAgo(7),
+    status: "Acknowledged",
+    paymentStatus: "Paid",
+  },
+  {
+    id: "ORD-1008",
+    guestName: "Lucas Meyer",
+    roomNumber: "816",
+    service: "Housekeeping",
+    quantity: 1,
+    amount: 0,
+    currency: "USD",
+    specialRequest: null,
+    orderTime: hoursAgo(4),
+    status: "Completed",
+    paymentStatus: "Paid",
+  },
+];
