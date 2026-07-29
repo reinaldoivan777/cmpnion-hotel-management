@@ -1,5 +1,3 @@
-import { useMemo } from "react";
-
 import {
   MetricCard,
   MetricCardSkeleton,
@@ -8,17 +6,12 @@ import {
   TopServicesCard,
   TopServicesCardSkeleton,
 } from "@/features/dashboard/components/top-services-card";
-import { selectDashboardOverview } from "@/features/dashboard/dashboard.selectors";
 import { OrderManagement } from "@/features/orders/components/order-management";
-import { useOrdersQuery } from "@/features/orders/hooks/use-orders";
+import { useDashboardOverviewQuery } from "@/features/orders/hooks/use-orders";
 
 export function DashboardPage() {
-  const ordersQuery = useOrdersQuery();
-  const orders = ordersQuery.data ?? [];
-  const dashboardOverview = useMemo(
-    () => selectDashboardOverview(orders),
-    [orders],
-  );
+  const dashboardOverviewQuery = useDashboardOverviewQuery();
+  const dashboardOverview = dashboardOverviewQuery.data;
 
   return (
     <div className="space-y-6">
@@ -38,11 +31,11 @@ export function DashboardPage() {
       </section>
 
       <section
-        aria-busy={ordersQuery.isLoading}
+        aria-busy={dashboardOverviewQuery.isLoading}
         aria-label="Operational metrics"
         className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5"
       >
-        {ordersQuery.isLoading
+        {dashboardOverviewQuery.isLoading || !dashboardOverview
           ? Array.from({ length: 5 }, (_, index) => (
               <MetricCardSkeleton key={index} />
             ))
@@ -52,16 +45,9 @@ export function DashboardPage() {
       </section>
 
       <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
-        <OrderManagement
-          isError={ordersQuery.isError}
-          isLoading={ordersQuery.isLoading}
-          onRetry={() => {
-            void ordersQuery.refetch();
-          }}
-          orders={orders}
-        />
+        <OrderManagement />
 
-        {ordersQuery.isLoading ? (
+        {dashboardOverviewQuery.isLoading || !dashboardOverview ? (
           <TopServicesCardSkeleton />
         ) : (
           <TopServicesCard services={dashboardOverview.topServices} />

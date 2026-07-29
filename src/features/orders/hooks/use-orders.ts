@@ -1,23 +1,43 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
+  getDashboardOverview,
   getOrderById,
-  getOrders,
+  getOrdersPage,
   updateOrderStatus,
 } from "@/features/orders/api/orders-api";
-import type { Order, OrderStatus } from "@/features/orders/orders.types";
+import type {
+  Order,
+  OrderListParams,
+  OrderListResponse,
+  OrderStatus,
+} from "@/features/orders/orders.types";
 
 export const ordersQueryKeys = {
   all: ["orders"] as const,
   lists: () => [...ordersQueryKeys.all, "list"] as const,
+  list: (params: OrderListParams) =>
+    [...ordersQueryKeys.lists(), params] as const,
   detail: (orderId: string) =>
     [...ordersQueryKeys.all, "detail", orderId] as const,
 };
 
-export function useOrdersQuery() {
+export const dashboardQueryKeys = {
+  overview: ["dashboard", "overview"] as const,
+};
+
+export function useOrdersPageQuery(params: OrderListParams) {
+  return useQuery<OrderListResponse>({
+    queryKey: ordersQueryKeys.list(params),
+    queryFn: () => getOrdersPage(params),
+    placeholderData: (previousData) => previousData,
+  });
+}
+
+export function useDashboardOverviewQuery() {
   return useQuery({
-    queryKey: ordersQueryKeys.lists(),
-    queryFn: getOrders,
+    queryKey: dashboardQueryKeys.overview,
+    queryFn: getDashboardOverview,
   });
 }
 
@@ -49,17 +69,14 @@ export function useUpdateOrderStatusMutation() {
     mutationFn: ({ orderId, nextStatus }: UpdateOrderStatusVariables) =>
       updateOrderStatus(orderId, nextStatus),
     onSuccess: (updatedOrder: Order) => {
-      queryClient.setQueryData<Order[]>(
-        ordersQueryKeys.lists(),
-        (currentOrders) =>
-          currentOrders?.map((order) =>
-            order.id === updatedOrder.id ? updatedOrder : order,
-          ),
-      );
       queryClient.setQueryData(
         ordersQueryKeys.detail(updatedOrder.id),
         updatedOrder,
       );
+      void queryClient.invalidateQueries({ queryKey: ordersQueryKeys.lists() });
+      void queryClient.invalidateQueries({
+        queryKey: dashboardQueryKeys.overview,
+      });
     },
   });
 }
