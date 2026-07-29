@@ -114,7 +114,7 @@ function createRealtimeOrder(): Order {
       : (index % 3) + 1;
 
   return {
-    id: `ORD-RT-${String(realtimeOrderSequence).padStart(4, "0")}`,
+    id: `ORD-${String(realtimeOrderSequence).padStart(4, "0")}`,
     guestName: realtimeGuestNames[index % realtimeGuestNames.length],
     roomNumber: realtimeRooms[index % realtimeRooms.length],
     service,
