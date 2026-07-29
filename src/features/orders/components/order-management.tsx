@@ -22,6 +22,7 @@ import {
   type RefObject,
   type ReactNode,
 } from "react";
+import { useSearchParams } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
@@ -39,18 +40,17 @@ import type {
   PaymentStatus,
 } from "@/features/orders/orders.types";
 import {
+  defaultOrderFilters,
+  hasActiveOrderFilters,
+  parseOrderFiltersFromSearchParams,
+  serializeOrderFiltersToSearchParams,
+} from "@/features/orders/orders.url-state";
+import {
   getNextPrimaryStatus,
   getOrderAgeInMinutes,
   isFinalOrderStatus,
   isSlaBreached,
 } from "@/features/orders/orders.utils";
-
-const defaultFilters: OrderFilters = {
-  search: "",
-  status: "All",
-  service: "All",
-  sort: "newest",
-};
 
 const primaryActionLabels: Partial<Record<OrderStatus, string>> = {
   New: "Acknowledge",
@@ -118,7 +118,7 @@ export function OrderManagement({
   onRetry,
   orders,
 }: OrderManagementProps) {
-  const [filters, setFilters] = useState<OrderFilters>(defaultFilters);
+  const [searchParams, setSearchParams] = useSearchParams();
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [cancelOrder, setCancelOrder] = useState<Order | null>(null);
   const [feedback, setFeedback] = useState<FeedbackMessage | null>(null);
@@ -128,17 +128,17 @@ export function OrderManagement({
   const returnFocusRef = useRef<HTMLElement | null>(null);
   const cancelReturnFocusRef = useRef<HTMLElement | null>(null);
 
+  const filters = useMemo(
+    () => parseOrderFiltersFromSearchParams(searchParams),
+    [searchParams],
+  );
   const filteredOrders = useMemo(
     () => selectFilteredOrders(orders, filters),
     [filters, orders],
   );
 
   const selectedOrder = orders.find((order) => order.id === selectedOrderId);
-  const hasActiveFilters =
-    filters.search.trim().length > 0 ||
-    filters.status !== "All" ||
-    filters.service !== "All" ||
-    filters.sort !== "newest";
+  const hasActiveFilters = hasActiveOrderFilters(filters);
 
   useEffect(() => {
     if (selectedOrder) {
@@ -199,7 +199,15 @@ export function OrderManagement({
   }
 
   function clearFilters() {
-    setFilters(defaultFilters);
+    setSearchParams(serializeOrderFiltersToSearchParams(defaultOrderFilters), {
+      replace: true,
+    });
+  }
+
+  function updateFilters(nextFilters: OrderFilters) {
+    setSearchParams(serializeOrderFiltersToSearchParams(nextFilters), {
+      replace: true,
+    });
   }
 
   const mutatingOrderId = updateStatusMutation.variables?.orderId ?? null;
@@ -281,10 +289,10 @@ export function OrderManagement({
               className="h-10 w-full rounded-md border border-border bg-surface pl-9 pr-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-primary/20"
               value={filters.search}
               onChange={(event) =>
-                setFilters((current) => ({
-                  ...current,
+                updateFilters({
+                  ...filters,
                   search: event.target.value,
-                }))
+                })
               }
               placeholder="Search guest, room, or order"
               type="search"
@@ -294,10 +302,10 @@ export function OrderManagement({
             label="Status"
             value={filters.status}
             onChange={(value) =>
-              setFilters((current) => ({
-                ...current,
+              updateFilters({
+                ...filters,
                 status: value as OrderFilters["status"],
-              }))
+              })
             }
             options={["All", ...ORDER_STATUSES]}
           />
@@ -305,10 +313,10 @@ export function OrderManagement({
             label="Service"
             value={filters.service}
             onChange={(value) =>
-              setFilters((current) => ({
-                ...current,
+              updateFilters({
+                ...filters,
                 service: value as OrderFilters["service"],
-              }))
+              })
             }
             options={["All", ...SERVICE_TYPES]}
           />
@@ -316,10 +324,10 @@ export function OrderManagement({
             label="Sort"
             value={filters.sort}
             onChange={(value) =>
-              setFilters((current) => ({
-                ...current,
+              updateFilters({
+                ...filters,
                 sort: value as OrderFilters["sort"],
-              }))
+              })
             }
             options={[
               { label: "Newest first", value: "newest" },
