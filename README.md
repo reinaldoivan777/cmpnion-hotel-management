@@ -24,6 +24,7 @@ Hotel staff need one place to understand current workload, identify overdue requ
 - Cancellation confirmation for non-final orders.
 - Optimistic status updates with rollback when a mutation fails.
 - SLA breach indicators for New orders older than 15 minutes.
+- Real-time toast notifications for new orders and overdue New orders.
 - Loading, empty, error, success, and mutation feedback states.
 - Focused Bun tests for selectors, SLA logic, status transitions, and mock API failure paths.
 
@@ -68,7 +69,7 @@ The app is organized around feature folders and a thin app shell:
 
 ## State Management
 
-TanStack Query owns async order state, loading/error states, caching, retries, paginated list requests, aggregate dashboard requests, and mutation updates. Status mutations optimistically update cached order pages and detail records, snapshot previous cache data, roll back on failure, and revalidate affected list and overview queries after settlement. React Router search parameters own order discovery state: search, status filter, service filter, and sort. Local React state is used for UI-only concerns such as selected order, cancellation dialog state, current page, page size, and feedback messages. Derived values such as metrics, filtered order counts, paginated orders, SLA state, and status actions are calculated from API data rather than duplicated in state.
+TanStack Query owns async order state, loading/error states, caching, retries, paginated list requests, aggregate dashboard requests, and mutation updates. Status mutations optimistically update cached order pages and detail records, snapshot previous cache data, roll back on failure, and revalidate affected list and overview queries after settlement. A mock real-time subscription emits new-order and overdue-order events, updates detail cache entries, and invalidates affected paginated list and dashboard overview queries. React Router search parameters own order discovery state: search, status filter, service filter, and sort. Local React state is used for UI-only concerns such as selected order, cancellation dialog state, current page, page size, transient toast notifications, and feedback messages. Derived values such as metrics, filtered order counts, paginated orders, SLA state, and status actions are calculated from API data rather than duplicated in state.
 
 ## URL State
 
@@ -94,9 +95,10 @@ The mock API in `src/features/orders/api/orders-api.ts` simulates asynchronous b
 - `getOrdersPage({ filters, page, pageSize })`
 - `getDashboardOverview()`
 - `getOrderById(orderId)`
+- `subscribeToOrderRealtimeEvents(listener)`
 - `updateOrderStatus(orderId, nextStatus)`
 
-It clones returned data, validates order responses with Zod, applies search/filter/sort before slicing paginated results, enforces the status machine with `canTransition`, and includes deterministic failure toggles for read and mutation scenarios. Mutations use optimistic cache updates with rollback, then invalidate paginated order-list and dashboard-overview queries so cached pages and aggregate metrics are refreshed without assuming the client has all orders in memory.
+It clones returned data, validates order responses with Zod, applies search/filter/sort before slicing paginated results, enforces the status machine with `canTransition`, emits mock real-time events, and includes deterministic failure toggles for read and mutation scenarios. Mutations use optimistic cache updates with rollback, then invalidate paginated order-list and dashboard-overview queries so cached pages and aggregate metrics are refreshed without assuming the client has all orders in memory.
 
 The local fixture exports 150 example orders, from `ORD-1001` through `ORD-1150`, so table pagination can be tested without a backend.
 
@@ -142,14 +144,13 @@ The dashboard uses stacked layouts on small screens, two- and three-column metri
 - No real backend persistence.
 - No authentication or authorization.
 - No table virtualization for extremely dense single-page table views.
-- No real-time order notifications.
 - Component interaction tests are limited by the current no-DOM Bun test setup.
 
 ## Future Improvements
 
 - Add table virtualization for extremely dense single-page table views.
 - Add a production API layer and real persistence.
-- Add real-time notifications for new and overdue orders.
+- Replace the mock real-time event stream with WebSocket or server-sent events.
 - Add component tests with a DOM test environment.
 - Add role-based permissions and audit history.
 

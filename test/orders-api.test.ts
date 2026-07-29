@@ -7,6 +7,8 @@ import {
   getOrderById,
   getOrdersPage,
   resetMockOrders,
+  subscribeToOrderRealtimeEvents,
+  triggerMockOrderRealtimeEvent,
   updateOrderStatus,
 } from "@/features/orders/api/orders-api";
 import { defaultOrderFilters } from "@/features/orders/orders.url-state";
@@ -78,6 +80,48 @@ describe("orders mock API failure scenarios", () => {
 
     expect(overview.metrics).toHaveLength(5);
     expect(overview.topServices.length).toBeGreaterThan(0);
+  });
+
+  test("emits new order events and includes the order in paginated results", async () => {
+    const receivedEvents: string[] = [];
+    const unsubscribe = subscribeToOrderRealtimeEvents((event) => {
+      receivedEvents.push(event.id);
+    });
+
+    const event = triggerMockOrderRealtimeEvent("new-order");
+    unsubscribe();
+
+    const firstPage = await getOrdersPage({
+      filters: defaultOrderFilters,
+      page: 1,
+      pageSize: 10,
+    });
+
+    expect(event?.type).toBe("new-order");
+    expect(receivedEvents).toEqual([event?.id]);
+    expect(firstPage.total).toBe(151);
+    expect(firstPage.orders[0].id).toBe(event?.order.id);
+  });
+
+  test("emits each overdue order notification once", () => {
+    const receivedOrderIds: string[] = [];
+    const unsubscribe = subscribeToOrderRealtimeEvents((event) => {
+      if (event.type === "overdue-order") {
+        receivedOrderIds.push(event.order.id);
+      }
+    });
+
+    const firstEvent = triggerMockOrderRealtimeEvent("overdue-order");
+    const secondEvent = triggerMockOrderRealtimeEvent("overdue-order");
+    unsubscribe();
+
+    expect(firstEvent?.type).toBe("overdue-order");
+    expect(secondEvent?.type).toBe("overdue-order");
+    expect(firstEvent?.order.id).not.toBe(secondEvent?.order.id);
+    expect(receivedOrderIds).toEqual([
+      firstEvent?.order.id,
+      secondEvent?.order.id,
+    ]);
   });
 
   test("fails the next mutation once and preserves the previous status", async () => {

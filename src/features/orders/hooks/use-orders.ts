@@ -4,17 +4,20 @@ import {
   useQueryClient,
   type QueryKey,
 } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
 
 import {
   getDashboardOverview,
   getOrderById,
   getOrdersPage,
+  subscribeToOrderRealtimeEvents,
   updateOrderStatus,
 } from "@/features/orders/api/orders-api";
 import type {
   Order,
   OrderListParams,
   OrderListResponse,
+  OrderRealtimeEvent,
   OrderStatus,
 } from "@/features/orders/orders.types";
 
@@ -75,6 +78,44 @@ interface UpdateOrderStatusVariables {
 interface UpdateOrderStatusContext {
   previousDetail: Order | undefined;
   previousOrderLists: OrderListQuerySnapshot[];
+}
+
+const maxRealtimeNotifications = 6;
+
+export function useOrderRealtimeNotifications() {
+  const queryClient = useQueryClient();
+  const [notifications, setNotifications] = useState<OrderRealtimeEvent[]>([]);
+
+  useEffect(() => {
+    return subscribeToOrderRealtimeEvents((event) => {
+      queryClient.setQueryData(
+        ordersQueryKeys.detail(event.order.id),
+        event.order,
+      );
+      void queryClient.invalidateQueries({ queryKey: ordersQueryKeys.lists() });
+      void queryClient.invalidateQueries({
+        queryKey: dashboardQueryKeys.overview,
+      });
+
+      setNotifications((currentNotifications) => [
+        event,
+        ...currentNotifications.filter(
+          (notification) => notification.id !== event.id,
+        ),
+      ].slice(0, maxRealtimeNotifications));
+    });
+  }, [queryClient]);
+
+  return {
+    dismissNotification: (notificationId: string) => {
+      setNotifications((currentNotifications) =>
+        currentNotifications.filter(
+          (notification) => notification.id !== notificationId,
+        ),
+      );
+    },
+    notifications,
+  };
 }
 
 export function useUpdateOrderStatusMutation() {

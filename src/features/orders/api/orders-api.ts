@@ -7,12 +7,39 @@ import type {
   Order,
   OrderListParams,
   OrderListResponse,
+  OrderRealtimeEvent,
   OrderStatus,
 } from "@/features/orders/orders.types";
-import { canTransition } from "@/features/orders/orders.utils";
+import {
+  canTransition,
+  isSlaBreached,
+} from "@/features/orders/orders.utils";
 
 const READ_DELAY_RANGE_MS = [500, 800] as const;
 const MUTATION_DELAY_RANGE_MS = [300, 600] as const;
+const REALTIME_EVENT_INTERVAL_MS = 12_000;
+const realtimeGuestNames = [
+  "Nora Blake",
+  "Leo Morgan",
+  "Iris Coleman",
+  "Caleb Foster",
+  "Zara Hughes",
+] as const;
+const realtimeRooms = ["214", "528", "731", "942", "1106"] as const;
+const realtimeServices = [
+  "Room Service",
+  "Housekeeping",
+  "Laundry",
+  "Extra Bed",
+  "Spa & Massage",
+] as const satisfies readonly Order["service"][];
+const realtimeAmounts: Record<Order["service"], number> = {
+  "Room Service": 26,
+  Housekeeping: 0,
+  Laundry: 12,
+  "Extra Bed": 30,
+  "Spa & Massage": 120,
+};
 
 interface MockApiFailureState {
   failNextRead: boolean;
@@ -25,6 +52,11 @@ const failureState: MockApiFailureState = {
 };
 
 let ordersStore = cloneOrders(mockOrders);
+let realtimeOrderSequence = 0;
+let realtimeInterval: ReturnType<typeof globalThis.setInterval> | null = null;
+let realtimeTickCount = 0;
+const realtimeListeners = new Set<(event: OrderRealtimeEvent) => void>();
+const overdueNotificationOrderIds = new Set<string>();
 
 function cloneOrder(order: Order): Order {
   return structuredClone(order);
@@ -67,6 +99,135 @@ export function resetMockOrders(): void {
   ordersStore = cloneOrders(mockOrders);
   failureState.failNextRead = false;
   failureState.failNextMutation = false;
+  realtimeOrderSequence = 0;
+  realtimeTickCount = 0;
+  overdueNotificationOrderIds.clear();
+}
+
+function createRealtimeOrder(): Order {
+  realtimeOrderSequence += 1;
+  const index = realtimeOrderSequence - 1;
+  const service = realtimeServices[index % realtimeServices.length];
+  const quantity =
+    service === "Spa & Massage" || service === "Extra Bed"
+      ? 1
+      : (index % 3) + 1;
+
+  return {
+    id: `ORD-RT-${String(realtimeOrderSequence).padStart(4, "0")}`,
+    guestName: realtimeGuestNames[index % realtimeGuestNames.length],
+    roomNumber: realtimeRooms[index % realtimeRooms.length],
+    service,
+    quantity,
+    amount: realtimeAmounts[service] * quantity,
+    currency: "USD",
+    specialRequest:
+      index % 2 === 0 ? "Live request from the guest app." : null,
+    orderTime: new Date().toISOString(),
+    status: "New",
+    paymentStatus: index % 4 === 0 ? "Pending" : "Paid",
+  };
+}
+
+function createRealtimeEvent(
+  type: OrderRealtimeEvent["type"],
+  order: Order,
+): OrderRealtimeEvent {
+  return {
+    id: `${type}-${order.id}-${Date.now()}`,
+    order: cloneOrder(order),
+    occurredAt: new Date().toISOString(),
+    type,
+  };
+}
+
+function emitRealtimeEvent(event: OrderRealtimeEvent): void {
+  for (const listener of realtimeListeners) {
+    listener(event);
+  }
+}
+
+function emitNewOrderEvent(): OrderRealtimeEvent {
+  const order = createRealtimeOrder();
+  const event = createRealtimeEvent("new-order", order);
+
+  ordersStore = [order, ...ordersStore];
+  emitRealtimeEvent(event);
+
+  return event;
+}
+
+function emitNextOverdueOrderEvent(): OrderRealtimeEvent | null {
+  const overdueOrder = ordersStore.find(
+    (order) =>
+      order.status === "New" &&
+      isSlaBreached(order, new Date()) &&
+      !overdueNotificationOrderIds.has(order.id),
+  );
+
+  if (!overdueOrder) {
+    return null;
+  }
+
+  overdueNotificationOrderIds.add(overdueOrder.id);
+  const event = createRealtimeEvent("overdue-order", overdueOrder);
+  emitRealtimeEvent(event);
+
+  return event;
+}
+
+function tickRealtimeEvents(): void {
+  realtimeTickCount += 1;
+
+  if (realtimeTickCount % 2 === 1) {
+    emitNewOrderEvent();
+    return;
+  }
+
+  emitNextOverdueOrderEvent();
+}
+
+function startRealtimeEvents(): void {
+  if (realtimeInterval) {
+    return;
+  }
+
+  realtimeInterval = globalThis.setInterval(
+    tickRealtimeEvents,
+    REALTIME_EVENT_INTERVAL_MS,
+  );
+}
+
+function stopRealtimeEvents(): void {
+  if (!realtimeInterval) {
+    return;
+  }
+
+  globalThis.clearInterval(realtimeInterval);
+  realtimeInterval = null;
+}
+
+export function subscribeToOrderRealtimeEvents(
+  listener: (event: OrderRealtimeEvent) => void,
+): () => void {
+  realtimeListeners.add(listener);
+  startRealtimeEvents();
+
+  return () => {
+    realtimeListeners.delete(listener);
+
+    if (realtimeListeners.size === 0) {
+      stopRealtimeEvents();
+    }
+  };
+}
+
+export function triggerMockOrderRealtimeEvent(
+  type: OrderRealtimeEvent["type"],
+): OrderRealtimeEvent | null {
+  return type === "new-order"
+    ? emitNewOrderEvent()
+    : emitNextOverdueOrderEvent();
 }
 
 export async function getOrdersPage({
