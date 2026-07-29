@@ -13,7 +13,15 @@ import {
   X,
   XCircle,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type RefObject,
+  type ReactNode,
+} from "react";
 
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
@@ -67,6 +75,42 @@ interface FeedbackMessage {
   text: string;
 }
 
+const focusableSelector = [
+  "a[href]",
+  "button:not([disabled])",
+  "input:not([disabled])",
+  "select:not([disabled])",
+  "textarea:not([disabled])",
+  "[tabindex]:not([tabindex='-1'])",
+].join(",");
+
+function trapFocus(event: KeyboardEvent<HTMLElement>) {
+  if (event.key !== "Tab") {
+    return;
+  }
+
+  const focusableElements = Array.from(
+    event.currentTarget.querySelectorAll<HTMLElement>(focusableSelector),
+  ).filter((element) => !element.hasAttribute("disabled"));
+
+  if (focusableElements.length === 0) {
+    event.preventDefault();
+    return;
+  }
+
+  const firstElement = focusableElements[0];
+  const lastElement = focusableElements[focusableElements.length - 1];
+  const activeElement = document.activeElement;
+
+  if (event.shiftKey && activeElement === firstElement) {
+    event.preventDefault();
+    lastElement.focus();
+  } else if (!event.shiftKey && activeElement === lastElement) {
+    event.preventDefault();
+    firstElement.focus();
+  }
+}
+
 export function OrderManagement({
   isError,
   isLoading,
@@ -81,6 +125,7 @@ export function OrderManagement({
   const updateStatusMutation = useUpdateOrderStatusMutation();
   const drawerCloseRef = useRef<HTMLButtonElement>(null);
   const returnFocusRef = useRef<HTMLElement | null>(null);
+  const cancelReturnFocusRef = useRef<HTMLElement | null>(null);
 
   const filteredOrders = useMemo(() => {
     const searchValue = filters.search.trim().toLocaleLowerCase();
@@ -135,6 +180,19 @@ export function OrderManagement({
     window.setTimeout(() => returnFocusRef.current?.focus(), 0);
   }
 
+  function openCancelDialog(order: Order) {
+    cancelReturnFocusRef.current =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+    setCancelOrder(order);
+  }
+
+  function closeCancelDialog() {
+    setCancelOrder(null);
+    window.setTimeout(() => cancelReturnFocusRef.current?.focus(), 0);
+  }
+
   async function updateOrderStatus(order: Order, nextStatus: OrderStatus) {
     setFeedback(null);
 
@@ -173,12 +231,21 @@ export function OrderManagement({
 
   if (isError) {
     return (
-      <section className="rounded-lg border border-border bg-surface p-6">
+      <section
+        aria-labelledby="orders-error-title"
+        className="rounded-lg border border-border bg-surface p-6"
+      >
         <h2 className="text-lg font-semibold text-foreground">
           Guest Service Orders
         </h2>
-        <div className="mt-4 rounded-md border border-red-200 bg-red-50 p-5">
-          <p className="text-sm font-semibold text-red-950">
+        <div
+          className="mt-4 rounded-md border border-red-200 bg-red-50 p-5"
+          role="alert"
+        >
+          <p
+            className="text-sm font-semibold text-red-950"
+            id="orders-error-title"
+          >
             Unable to load orders.
           </p>
           <p className="mt-1 text-sm text-red-800">Please try again.</p>
@@ -192,11 +259,18 @@ export function OrderManagement({
   }
 
   return (
-    <section className="rounded-lg border border-border bg-surface">
-      <div className="border-b border-border p-5">
+    <section
+      aria-busy={updateStatusMutation.isPending}
+      aria-labelledby="orders-section-title"
+      className="rounded-lg border border-border bg-surface"
+    >
+      <div className="border-b border-border p-4 sm:p-5">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <h2 className="text-lg font-semibold text-foreground">
+            <h2
+              className="text-lg font-semibold text-foreground"
+              id="orders-section-title"
+            >
               Guest Service Orders
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">
@@ -213,7 +287,10 @@ export function OrderManagement({
           ) : null}
         </div>
 
-        <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(220px,1fr)_180px_200px_160px]">
+        <div
+          className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(220px,1fr)_180px_200px_160px]"
+          role="search"
+        >
           <label className="relative block">
             <span className="sr-only">Search orders</span>
             <Search
@@ -221,6 +298,7 @@ export function OrderManagement({
               aria-hidden="true"
             />
             <input
+              aria-controls="orders-results"
               className="h-10 w-full rounded-md border border-border bg-surface pl-9 pr-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-primary/20"
               value={filters.search}
               onChange={(event) =>
@@ -230,6 +308,7 @@ export function OrderManagement({
                 }))
               }
               placeholder="Search guest, room, or order"
+              type="search"
             />
           </label>
           <SelectField
@@ -279,12 +358,19 @@ export function OrderManagement({
               feedback.tone === "error" &&
                 "border-red-200 bg-red-50 text-red-950",
             )}
-            role="status"
+            aria-live="polite"
+            role={feedback.tone === "error" ? "alert" : "status"}
           >
             {feedback.tone === "success" ? (
-              <CheckCircle2 className="mt-0.5 size-4 shrink-0" />
+              <CheckCircle2
+                className="mt-0.5 size-4 shrink-0"
+                aria-hidden="true"
+              />
             ) : (
-              <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+              <AlertTriangle
+                className="mt-0.5 size-4 shrink-0"
+                aria-hidden="true"
+              />
             )}
             <span>{feedback.text}</span>
           </div>
@@ -310,8 +396,12 @@ export function OrderManagement({
         />
       ) : (
         <>
-          <div className="hidden overflow-x-auto md:block">
+          <div className="hidden overflow-x-auto xl:block" id="orders-results">
             <table className="w-full border-collapse text-left text-sm">
+              <caption className="sr-only">
+                Guest service orders with status, payment, amount, and available
+                actions
+              </caption>
               <thead className="bg-muted text-xs uppercase text-muted-foreground">
                 <tr>
                   <Th>Order</Th>
@@ -332,7 +422,7 @@ export function OrderManagement({
                     isMutating={mutatingOrderId === order.id}
                     isUpdatingAnyOrder={updateStatusMutation.isPending}
                     now={now}
-                    onCancel={() => setCancelOrder(order)}
+                    onCancel={() => openCancelDialog(order)}
                     onPrimaryAction={(nextStatus) =>
                       updateOrderStatus(order, nextStatus)
                     }
@@ -343,14 +433,14 @@ export function OrderManagement({
               </tbody>
             </table>
           </div>
-          <div className="divide-y divide-border md:hidden">
+          <div className="divide-y divide-border xl:hidden" id="orders-results">
             {filteredOrders.map((order) => (
               <OrderMobileCard
                 key={order.id}
                 isMutating={mutatingOrderId === order.id}
                 isUpdatingAnyOrder={updateStatusMutation.isPending}
                 now={now}
-                onCancel={() => setCancelOrder(order)}
+                onCancel={() => openCancelDialog(order)}
                 onPrimaryAction={(nextStatus) =>
                   updateOrderStatus(order, nextStatus)
                 }
@@ -368,7 +458,7 @@ export function OrderManagement({
           isMutating={mutatingOrderId === selectedOrder.id}
           isUpdatingAnyOrder={updateStatusMutation.isPending}
           now={now}
-          onCancel={() => setCancelOrder(selectedOrder)}
+          onCancel={() => openCancelDialog(selectedOrder)}
           onClose={closeOrderDetails}
           onPrimaryAction={(nextStatus) =>
             updateOrderStatus(selectedOrder, nextStatus)
@@ -380,7 +470,7 @@ export function OrderManagement({
       {cancelOrder ? (
         <CancelDialog
           isMutating={updateStatusMutation.isPending}
-          onClose={() => setCancelOrder(null)}
+          onClose={closeCancelDialog}
           onConfirm={() => updateOrderStatus(cancelOrder, "Cancelled")}
           order={cancelOrder}
         />
@@ -454,9 +544,10 @@ function OrderTableRow({
 
   return (
     <tr
+      aria-label={`${order.id}, ${order.guestName}, room ${order.roomNumber}, ${order.status}`}
       className={cn(
         "align-top transition hover:bg-muted/50",
-        slaBreached && "bg-amber-50",
+        slaBreached && "bg-amber-50 shadow-[inset_4px_0_0_rgb(217_119_6)]",
       )}
     >
       <Td>
@@ -497,6 +588,7 @@ function OrderTableRow({
               className="min-w-32 px-3"
               disabled={isUpdatingAnyOrder}
               onClick={() => onPrimaryAction(nextStatus)}
+              aria-label={`${primaryActionLabels[order.status]} ${order.id}`}
             >
               {isMutating ? (
                 <Loader2 className="mr-2 size-4 animate-spin" aria-hidden="true" />
@@ -509,6 +601,7 @@ function OrderTableRow({
               className="px-3 text-red-700 hover:bg-red-50"
               disabled={isUpdatingAnyOrder}
               onClick={onCancel}
+              aria-label={`Cancel ${order.id}`}
               variant="secondary"
             >
               Cancel
@@ -538,9 +631,13 @@ function OrderMobileCard({
   order: Order;
 }) {
   const nextStatus = getNextPrimaryStatus(order.status);
+  const slaBreached = isSlaBreached(order, now);
 
   return (
-    <article className="p-4">
+    <article
+      aria-label={`${order.id}, ${order.guestName}, room ${order.roomNumber}, ${order.status}`}
+      className={cn("p-4", slaBreached && "border-l-4 border-amber-600 bg-amber-50")}
+    >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <button
@@ -554,9 +651,11 @@ function OrderMobileCard({
             {order.guestName} · Room {order.roomNumber}
           </p>
         </div>
-        <RelativeAge order={order} now={now} />
+        <div className="shrink-0">
+          <RelativeAge order={order} now={now} />
+        </div>
       </div>
-      <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
+      <div className="mt-3 grid gap-3 text-sm min-[420px]:grid-cols-2">
         <Info label="Service" value={`${order.service} · Qty ${order.quantity}`} />
         <Info label="Amount" value={formatCurrency(order.amount, order.currency)} />
         <Info label="Status" value={<StatusBadge status={order.status} />} />
@@ -565,8 +664,8 @@ function OrderMobileCard({
           value={<PaymentBadge status={order.paymentStatus} />}
         />
       </div>
-      {isSlaBreached(order, now) ? <SlaBadge order={order} now={now} /> : null}
-      <div className="mt-4 flex flex-wrap gap-2">
+      {slaBreached ? <SlaBadge order={order} now={now} /> : null}
+      <div className="mt-4 grid gap-2 min-[420px]:flex min-[420px]:flex-wrap">
         <Button className="px-3" onClick={onView} variant="secondary">
           <Eye className="mr-2 size-4" aria-hidden="true" />
           View
@@ -576,6 +675,7 @@ function OrderMobileCard({
             className="px-3"
             disabled={isUpdatingAnyOrder}
             onClick={() => onPrimaryAction(nextStatus)}
+            aria-label={`${primaryActionLabels[order.status]} ${order.id}`}
           >
             {isMutating ? (
               <Loader2 className="mr-2 size-4 animate-spin" aria-hidden="true" />
@@ -588,6 +688,7 @@ function OrderMobileCard({
             className="px-3 text-red-700 hover:bg-red-50"
             disabled={isUpdatingAnyOrder}
             onClick={onCancel}
+            aria-label={`Cancel ${order.id}`}
             variant="secondary"
           >
             Cancel
@@ -608,7 +709,7 @@ function OrderDetailsDrawer({
   onPrimaryAction,
   order,
 }: {
-  closeButtonRef: React.RefObject<HTMLButtonElement>;
+  closeButtonRef: RefObject<HTMLButtonElement>;
   isMutating: boolean;
   isUpdatingAnyOrder: boolean;
   now: Date;
@@ -632,17 +733,19 @@ function OrderDetailsDrawer({
       <aside
         aria-describedby="order-details-description"
         aria-labelledby="order-details-title"
-        className="ml-auto flex h-full w-full max-w-xl flex-col bg-surface shadow-2xl"
+        className="ml-auto flex h-dvh w-full flex-col bg-surface shadow-2xl sm:max-w-xl"
         role="dialog"
         aria-modal="true"
         onKeyDown={(event) => {
           if (event.key === "Escape") {
             onClose();
+            return;
           }
+          trapFocus(event);
         }}
       >
-        <div className="flex items-start justify-between gap-4 border-b border-border p-5">
-          <div>
+        <div className="flex items-start justify-between gap-4 border-b border-border p-4 sm:p-5">
+          <div className="min-w-0">
             <p className="text-sm font-semibold text-primary">
               {order.id}
               {isMutating ? (
@@ -670,7 +773,7 @@ function OrderDetailsDrawer({
           </IconButton>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-5">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-5">
           <div className="grid gap-3 sm:grid-cols-2">
             <Info label="Order ID" value={order.id} />
             <Info label="Guest" value={order.guestName} />
@@ -717,7 +820,7 @@ function OrderDetailsDrawer({
           />
         </div>
 
-        <div className="border-t border-border p-5">
+        <div className="border-t border-border p-4 sm:p-5">
           <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
             <Button onClick={onClose} variant="secondary">
               Close
@@ -727,6 +830,7 @@ function OrderDetailsDrawer({
                 className="text-red-700 hover:bg-red-50"
                 disabled={isUpdatingAnyOrder}
                 onClick={onCancel}
+                aria-label={`Cancel ${order.id}`}
                 variant="secondary"
               >
                 Cancel Order
@@ -736,6 +840,7 @@ function OrderDetailsDrawer({
               <Button
                 disabled={isUpdatingAnyOrder}
                 onClick={() => onPrimaryAction(nextStatus)}
+                aria-label={`${primaryActionLabels[order.status]} ${order.id}`}
               >
                 {isMutating ? (
                   <Loader2 className="mr-2 size-4 animate-spin" aria-hidden="true" />
@@ -865,11 +970,13 @@ function CancelDialog({
         aria-describedby="cancel-order-description"
         aria-labelledby="cancel-order-title"
         aria-modal="true"
-        className="w-full max-w-md rounded-lg bg-surface p-5 shadow-2xl"
+        className="max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-lg bg-surface p-5 shadow-2xl"
         onKeyDown={(event) => {
           if (event.key === "Escape" && !isMutating) {
             onClose();
+            return;
           }
+          trapFocus(event);
         }}
         role="alertdialog"
       >
@@ -907,6 +1014,7 @@ function CancelDialog({
             className="bg-red-700 text-white hover:bg-red-800"
             disabled={isMutating}
             onClick={onConfirm}
+            aria-label={`Confirm cancellation for ${order.id}`}
           >
             {isMutating ? (
               <Loader2 className="mr-2 size-4 animate-spin" aria-hidden="true" />
@@ -980,7 +1088,7 @@ function Info({
   value,
 }: {
   label: string;
-  value: React.ReactNode;
+  value: ReactNode;
 }) {
   return (
     <div>
@@ -997,7 +1105,7 @@ function EmptyState({
   description,
   title,
 }: {
-  action?: React.ReactNode;
+  action?: ReactNode;
   description: string;
   title: string;
 }) {
@@ -1012,16 +1120,23 @@ function EmptyState({
 
 function OrderManagementSkeleton() {
   return (
-    <section className="rounded-lg border border-border bg-surface p-5">
-      <div className="h-6 w-56 rounded bg-muted" />
+    <section
+      aria-busy="true"
+      aria-labelledby="orders-loading-title"
+      className="rounded-lg border border-border bg-surface p-4 sm:p-5"
+    >
+      <h2 className="sr-only" id="orders-loading-title">
+        Guest Service Orders loading
+      </h2>
+      <div className="h-6 w-56 max-w-full rounded bg-muted" aria-hidden="true" />
       <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(220px,1fr)_180px_200px_160px]">
         {Array.from({ length: 4 }, (_, index) => (
-          <div key={index} className="h-10 rounded-md bg-muted" />
+          <div key={index} className="h-10 rounded-md bg-muted" aria-hidden="true" />
         ))}
       </div>
       <div className="mt-5 space-y-3">
         {Array.from({ length: 5 }, (_, index) => (
-          <div key={index} className="h-14 rounded-md bg-muted" />
+          <div key={index} className="h-14 rounded-md bg-muted" aria-hidden="true" />
         ))}
       </div>
     </section>
@@ -1032,7 +1147,7 @@ function Th({
   children,
   className,
 }: {
-  children: React.ReactNode;
+  children: ReactNode;
   className?: string;
 }) {
   return (
@@ -1046,7 +1161,7 @@ function Td({
   children,
   className,
 }: {
-  children: React.ReactNode;
+  children: ReactNode;
   className?: string;
 }) {
   return <td className={cn("px-4 py-3", className)}>{children}</td>;
